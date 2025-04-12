@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres:${DB_VERSION:-14}
+    container_name: ${DB_CONTAINER_NAME:-db}
+    ports:
+      - ${DB_PORT:-5432}:${DB_PORT:-5432}
+    expose:
+      - ${DB_PORT:-5432}
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      PGPORT: ${DB_PORT:-5432}
