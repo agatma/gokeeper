@@ -1,8 +1,9 @@
-package api
+package middlewares
 
 import (
 	"fmt"
-	"gokeeper/internal/server/core/logger"
+	"gokeeper/pkg/auth"
+	"gokeeper/pkg/logger"
 	"net/http"
 	"time"
 
@@ -63,4 +64,22 @@ func LoggingRequestMiddleware(next http.Handler) http.Handler {
 		)
 	}
 	return http.HandlerFunc(logFn)
+}
+
+// AuthenticateMiddleware check authorization header
+func AuthenticateMiddleware(authenticator *auth.Authenticator) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			reqHeaderJWT := r.Header.Get("Authorization")
+
+			userID, err := authenticator.GetUserID(reqHeaderJWT)
+			if err != nil {
+				logger.Log.Info("failed to authenticate user", zap.Error(err))
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			r.Header.Set("X-User-ID", userID.String())
+			next.ServeHTTP(w, r)
+		})
+	}
 }

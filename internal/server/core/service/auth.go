@@ -25,7 +25,7 @@ func NewAuthService(authStorage storage.AuthStorage, authenticator auth.Authenti
 	}
 }
 
-func (as *AuthService) Register(ctx context.Context, inUser domain.InUser) (auth.Token, error) {
+func (as *AuthService) Register(ctx context.Context, inUser domain.InUserRequest) (auth.Token, error) {
 	tx, err := as.authStorage.BeginTx(ctx)
 
 	if err != nil {
@@ -43,7 +43,6 @@ func (as *AuthService) Register(ctx context.Context, inUser domain.InUser) (auth
 		ID:           uuid.New(),
 	}
 	err = as.authStorage.InsertUser(ctx, newUser, tx)
-	fmt.Println("здесь вставили пользователя")
 	if err != nil {
 		err = tx.Rollback()
 		if err != nil {
@@ -62,7 +61,7 @@ func (as *AuthService) Register(ctx context.Context, inUser domain.InUser) (auth
 	return token, nil
 }
 
-func (as *AuthService) Login(ctx context.Context, inUser domain.InUser) (auth.Token, error) {
+func (as *AuthService) Login(ctx context.Context, inUser domain.InUserRequest) (auth.Token, error) {
 	tx, err := as.authStorage.BeginTx(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to begin transaction: %v", err)

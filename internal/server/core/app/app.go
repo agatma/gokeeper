@@ -5,9 +5,9 @@ import (
 	"gokeeper/internal/server/adapters/api"
 	"gokeeper/internal/server/adapters/storage"
 	"gokeeper/internal/server/core/config"
-	"gokeeper/internal/server/core/logger"
 	"gokeeper/internal/server/core/service"
 	"gokeeper/pkg/auth"
+	"gokeeper/pkg/logger"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
@@ -32,7 +32,7 @@ func NewServer() (*Server, error) {
 	services := service.NewServices(newStorage, *authenticator)
 	return &Server{
 		cfg: cfg,
-		api: api.NewAPI(services, cfg),
+		api: api.NewAPI(services, cfg, authenticator),
 	}, nil
 }
 

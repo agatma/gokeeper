@@ -1,11 +1,11 @@
-package database
+package postgresql
 
 import (
 	"database/sql"
 	"embed"
 	"errors"
 	"fmt"
-	"gokeeper/internal/server/core/logger"
+	"gokeeper/pkg/logger"
 
 	"github.com/pressly/goose/v3"
 )

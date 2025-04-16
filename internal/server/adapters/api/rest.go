@@ -2,20 +2,19 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"gokeeper/internal/server/core/config"
 	"gokeeper/internal/server/core/domain"
-	"gokeeper/internal/server/core/logger"
 	"gokeeper/pkg/auth"
-	"io"
+	"gokeeper/pkg/logger"
+	"gokeeper/pkg/middlewares"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/go-http-utils/headers"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 
 	"github.com/go-chi/chi/v5"
@@ -29,30 +28,51 @@ type API struct {
 }
 
 type AuthService interface {
-	Register(ctx context.Context, inUser domain.InUser) (auth.Token, error)
-	Login(ctx context.Context, inUser domain.InUser) (auth.Token, error)
+	Register(ctx context.Context, inUser domain.InUserRequest) (auth.Token, error)
+	Login(ctx context.Context, inUser domain.InUserRequest) (auth.Token, error)
+}
+
+type PrivateService interface {
+	Save(ctx context.Context, pd *domain.Data, userID uuid.UUID) error
+	GetByID(ctx context.Context, id string, userID uuid.UUID) (*domain.Data, error)
+	Delete(ctx context.Context, pd *domain.DeleteRequest, userID uuid.UUID) error
+	GetAll(ctx context.Context, req *domain.GetAllRequest, userID uuid.UUID) ([]domain.Data, error)
 }
 
 type Services interface {
 	AuthService
+	PrivateService
 }
 
 type Handler struct {
 	services Services
 }
 
-func NewAPI(services Services, cfg *config.Config) *API {
+func NewAPI(services Services, cfg *config.Config, auth *auth.Authenticator) *API {
 	h := &Handler{services}
 	r := chi.NewRouter()
 
 	r.Use(middleware.Timeout(serverTimeout * time.Second))
-	r.Use(LoggingRequestMiddleware)
+	r.Use(middlewares.LoggingRequestMiddleware)
 	r.Route("/api/user", func(r chi.Router) {
 		r.Route("/register", func(r chi.Router) {
 			r.Post("/", h.Register)
 		})
 		r.Route("/login", func(r chi.Router) {
 			r.Post("/", h.Login)
+		})
+	})
+	r.Route("/api/private", func(r chi.Router) {
+		r.Use(middlewares.AuthenticateMiddleware(auth))
+		r.Group(func(r chi.Router) {
+			r.Post("/", h.Save)
+			r.Delete("/", h.Delete)
+		})
+		r.Group(func(r chi.Router) {
+			r.Get("/{id:^[a-zA-Z0-9-_]+}", h.Get)
+			r.Group(func(r chi.Router) {
+				r.Get("/", h.GetAll)
+			})
 		})
 	})
 	return &API{
@@ -79,51 +99,4 @@ func (a *API) Run() error {
 		return fmt.Errorf("failed run server: %w", err)
 	}
 	return nil
-}
-
-func (h *Handler) Register(w http.ResponseWriter, req *http.Request) {
-	reqBody, err := io.ReadAll(req.Body)
-	if err != nil {
-		logger.Log.Debug("can not read body", zap.Error(err))
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
-	var inUser domain.InUser
-	if err = json.Unmarshal(reqBody, &inUser); err != nil {
-		logger.Log.Debug("can not unmarshall json", zap.Error(err))
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
-
-	tokenStr, err := h.services.Register(req.Context(), inUser)
-	if err != nil {
-		handleException(w, err)
-		return
-	}
-	w.Header().Set(headers.Authorization, string(tokenStr))
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *Handler) Login(w http.ResponseWriter, req *http.Request) {
-	reqBody, err := io.ReadAll(req.Body)
-	if err != nil {
-		logger.Log.Debug("can not read body", zap.Error(err))
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
-
-	var inUser domain.InUser
-	if err = json.Unmarshal(reqBody, &inUser); err != nil {
-		logger.Log.Debug("can not unmarshall json", zap.Error(err))
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
-	tokenStr, err := h.services.Login(req.Context(), inUser)
-	if err != nil {
-		handleException(w, err)
-		return
-	}
-	w.Header().Set(headers.Authorization, string(tokenStr))
-	w.WriteHeader(http.StatusOK)
-
 }

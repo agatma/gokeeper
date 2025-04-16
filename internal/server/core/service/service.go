@@ -7,6 +7,7 @@ import (
 
 type Services struct {
 	*AuthService
+	*PrivateService
 }
 
 func NewServices(
@@ -15,5 +16,6 @@ func NewServices(
 ) *Services {
 	return &Services{
 		NewAuthService(storage, authenticator),
+		NewPrivateService(storage),
 	}
 }

@@ -1,0 +1,18 @@
+-- +goose Up
+CREATE TABLE IF NOT EXISTS private (
+    id VARCHAR(255) NOT NULL,
+    user_id UUID NOT NULL,
+    type VARCHAR(255) NOT NULL DEFAULT 'BYTES',
+    data BYTEA NOT NULL,
+    meta TEXT NOT NULL,
+    saved_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS private_user_id_id_idx ON private(user_id, id);
+
+
+-- +goose Down
+DROP TABLE private;

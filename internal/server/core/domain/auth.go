@@ -2,7 +2,7 @@ package domain
 
 import "github.com/google/uuid"
 
-type InUser struct {
+type InUserRequest struct {
 	Login    string `json:"login"`
 	Password string `json:"password"`
 }
