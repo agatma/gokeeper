@@ -24,7 +24,7 @@ func (pfw *PrivateFileWorker) SaveMany(pd []domain.Data) error {
 	}
 
 	savedPrivateData = append(savedPrivateData, pd...)
-	newPersonalData, err := json.Marshal(savedPrivateData)
+	newPrivateData, err := json.Marshal(savedPrivateData)
 	if err != nil {
 		return err
 	}
@@ -34,7 +34,7 @@ func (pfw *PrivateFileWorker) SaveMany(pd []domain.Data) error {
 		return err
 	}
 	defer file.Close()
-	_, err = file.Write(newPersonalData)
+	_, err = file.Write(newPrivateData)
 	return err
 }
 

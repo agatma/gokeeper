@@ -126,14 +126,14 @@ func (h *Handler) GetAll(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	personalData, err := h.services.GetAll(req.Context(), &GetAllRequest, userID)
+	privateData, err := h.services.GetAll(req.Context(), &GetAllRequest, userID)
 	if err != nil {
 		logger.Log.Error("GetAll: internal error", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	resp, err := json.Marshal(personalData)
+	resp, err := json.Marshal(privateData)
 	if err != nil {
 		logger.Log.Error("GetAll: internal error", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
