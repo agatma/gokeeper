@@ -2,7 +2,7 @@ package api
 
 import (
 	"encoding/json"
-	"gokeeper/internal/server/core/domain"
+	"gokeeper/pkg/domain"
 	"gokeeper/pkg/logger"
 	"io"
 	"net/http"

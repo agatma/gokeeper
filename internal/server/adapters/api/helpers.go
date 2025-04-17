@@ -2,7 +2,7 @@ package api
 
 import (
 	"errors"
-	"gokeeper/internal/server/core/domain"
+	"gokeeper/pkg/domain"
 	"gokeeper/pkg/logger"
 	"net/http"
 

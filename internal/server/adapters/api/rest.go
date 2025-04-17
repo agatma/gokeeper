@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"gokeeper/internal/server/core/config"
-	"gokeeper/internal/server/core/domain"
 	"gokeeper/pkg/auth"
+	domain2 "gokeeper/pkg/domain"
 	"gokeeper/pkg/logger"
 	"gokeeper/pkg/middlewares"
 	"net/http"
@@ -28,15 +28,15 @@ type API struct {
 }
 
 type AuthService interface {
-	Register(ctx context.Context, inUser domain.InUserRequest) (auth.Token, error)
-	Login(ctx context.Context, inUser domain.InUserRequest) (auth.Token, error)
+	Register(ctx context.Context, inUser domain2.InUserRequest) (auth.Token, error)
+	Login(ctx context.Context, inUser domain2.InUserRequest) (auth.Token, error)
 }
 
 type PrivateService interface {
-	Save(ctx context.Context, pd *domain.Data, userID uuid.UUID) error
-	GetByID(ctx context.Context, id string, userID uuid.UUID) (*domain.Data, error)
-	Delete(ctx context.Context, pd *domain.DeleteRequest, userID uuid.UUID) error
-	GetAll(ctx context.Context, req *domain.GetAllRequest, userID uuid.UUID) ([]domain.Data, error)
+	Save(ctx context.Context, pd *domain2.Data, userID uuid.UUID) error
+	GetByID(ctx context.Context, id string, userID uuid.UUID) (*domain2.Data, error)
+	Delete(ctx context.Context, pd *domain2.DeleteRequest, userID uuid.UUID) error
+	GetAll(ctx context.Context, req *domain2.GetAllRequest, userID uuid.UUID) ([]domain2.Data, error)
 }
 
 type Services interface {

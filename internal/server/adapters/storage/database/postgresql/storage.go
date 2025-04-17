@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"gokeeper/internal/server/adapters/storage/database"
 	"gokeeper/internal/server/adapters/storage/database/postgresql/queries"
-	"gokeeper/internal/server/core/domain"
+	domain2 "gokeeper/pkg/domain"
 	"gokeeper/pkg/logger"
 
 	"github.com/google/uuid"
@@ -40,43 +40,43 @@ func (s Storage) BeginTx(ctx context.Context) (*database.Trx, error) {
 	return database.BeginTx(ctx, s.db)
 }
 
-func (s Storage) GetUser(ctx context.Context, login string) (domain.User, error) {
+func (s Storage) GetUser(ctx context.Context, login string) (domain2.User, error) {
 	row := s.db.QueryRowContext(ctx, queries.GetUser, login)
 
-	var userInDB domain.User
+	var userInDB domain2.User
 	err := row.Scan(&userInDB.ID, &userInDB.Login, &userInDB.PasswordHash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return domain.User{}, domain.ErrUserNotFound
+			return domain2.User{}, domain2.ErrUserNotFound
 		}
-		return domain.User{}, fmt.Errorf("failed to scan user from db: %w", err)
+		return domain2.User{}, fmt.Errorf("failed to scan user from db: %w", err)
 	}
 	return userInDB, nil
 }
 
-func (s Storage) InsertUser(ctx context.Context, newUser domain.User, tx *database.Trx) error {
+func (s Storage) InsertUser(ctx context.Context, newUser domain2.User, tx *database.Trx) error {
 	if _, err := tx.ExecContext(ctx, queries.InsertUser, newUser.ID, newUser.Login, newUser.PasswordHash); err != nil {
 		return fmt.Errorf("failed to insert user: %w", err)
 	}
 	return nil
 }
 
-func (s Storage) GetByID(ctx context.Context, id string, userID uuid.UUID, tx *database.Trx) (*domain.Data, error) {
-	var privateDataInDB domain.Data
+func (s Storage) GetByID(ctx context.Context, id string, userID uuid.UUID, tx *database.Trx) (*domain2.Data, error) {
+	var privateDataInDB domain2.Data
 	row := tx.QueryRowContext(ctx, queries.GetDataByID, userID, id)
 
 	privateDataInDB.ID = id
 	err := row.Scan(&privateDataInDB.DataType, &privateDataInDB.Data, &privateDataInDB.MetaData, &privateDataInDB.SavedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, domain.ErrPrivateDataNotFound
+			return nil, domain2.ErrPrivateDataNotFound
 		}
 		return nil, fmt.Errorf("failed to scan private data from db: %w", err)
 	}
 	return &privateDataInDB, nil
 }
 
-func (s Storage) InsertOrUpdate(ctx context.Context, pd *domain.Data, userID uuid.UUID, tx *database.Trx) error {
+func (s Storage) InsertOrUpdate(ctx context.Context, pd *domain2.Data, userID uuid.UUID, tx *database.Trx) error {
 	if _, err := tx.ExecContext(ctx, queries.InsertData, pd.ID, pd.DataType, pd.Data, pd.MetaData, pd.SavedAt, userID); err != nil {
 		return fmt.Errorf("failed to insert or update data: %w", err)
 	}
@@ -90,7 +90,7 @@ func (s Storage) Delete(ctx context.Context, id string, userID uuid.UUID, tx *da
 	return nil
 }
 
-func (s Storage) GetAll(ctx context.Context, req *domain.GetAllRequest, userID uuid.UUID) ([]domain.Data, error) {
+func (s Storage) GetAll(ctx context.Context, req *domain2.GetAllRequest, userID uuid.UUID) ([]domain2.Data, error) {
 	rows, err := s.db.QueryContext(ctx, queries.GetAllDataByUserID, userID, req.Limit, req.Offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query database: %w", err)
@@ -102,9 +102,9 @@ func (s Storage) GetAll(ctx context.Context, req *domain.GetAllRequest, userID u
 		}
 	}()
 
-	var personalData []domain.Data
+	var personalData []domain2.Data
 	for rows.Next() {
-		var personalRow domain.Data
+		var personalRow domain2.Data
 
 		err = rows.Scan(&personalRow.ID, &personalRow.DataType, &personalRow.Data, &personalRow.MetaData, &personalRow.SavedAt)
 		if err != nil {

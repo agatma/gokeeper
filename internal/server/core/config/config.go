@@ -7,11 +7,11 @@ import (
 )
 
 type Config struct {
-	DSN          string        `env:"DATABASE_DSN" json:"database_dsn"`
-	Address      string        `env:"ADDRESS" json:"address"`
-	LogLevel     string        `env:"LOG_LEVEL" json:"log_level"`
-	JWTSecretKey string        `env:"SECRET_KEY" json:"secret_key"`
-	TokenExp     time.Duration `env:"TOKEN_EXP" json:"token_exp"`
+	DSN          string        `env:"DATABASE_DSN"`
+	Address      string        `env:"ADDRESS"`
+	LogLevel     string        `env:"LOG_LEVEL"`
+	JWTSecretKey string        `env:"SECRET_KEY"`
+	TokenExp     time.Duration `env:"TOKEN_EXP"`
 }
 
 func NewConfig() *Config {

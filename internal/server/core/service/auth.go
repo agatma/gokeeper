@@ -7,8 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"gokeeper/internal/server/adapters/storage"
-	"gokeeper/internal/server/core/domain"
 	"gokeeper/pkg/auth"
+	domain2 "gokeeper/pkg/domain"
 
 	"github.com/google/uuid"
 )
@@ -25,7 +25,7 @@ func NewAuthService(authStorage storage.AuthStorage, authenticator auth.Authenti
 	}
 }
 
-func (as *AuthService) Register(ctx context.Context, inUser domain.InUserRequest) (auth.Token, error) {
+func (as *AuthService) Register(ctx context.Context, inUser domain2.InUserRequest) (auth.Token, error) {
 	tx, err := as.authStorage.BeginTx(ctx)
 
 	if err != nil {
@@ -34,10 +34,10 @@ func (as *AuthService) Register(ctx context.Context, inUser domain.InUserRequest
 
 	if registeredUser, err := as.authStorage.GetUser(ctx, inUser.Login); err == nil {
 		if registeredUser.Login != "" {
-			return "", domain.ErrUserConflict
+			return "", domain2.ErrUserConflict
 		}
 	}
-	newUser := domain.User{
+	newUser := domain2.User{
 		Login:        inUser.Login,
 		PasswordHash: generatePasswordHash(inUser.Password),
 		ID:           uuid.New(),
@@ -61,7 +61,7 @@ func (as *AuthService) Register(ctx context.Context, inUser domain.InUserRequest
 	return token, nil
 }
 
-func (as *AuthService) Login(ctx context.Context, inUser domain.InUserRequest) (auth.Token, error) {
+func (as *AuthService) Login(ctx context.Context, inUser domain2.InUserRequest) (auth.Token, error) {
 	tx, err := as.authStorage.BeginTx(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to begin transaction: %v", err)
@@ -69,14 +69,14 @@ func (as *AuthService) Login(ctx context.Context, inUser domain.InUserRequest) (
 
 	userInDB, err := as.authStorage.GetUser(ctx, inUser.Login)
 	if err != nil {
-		if errors.Is(err, domain.ErrUserNotFound) {
-			return "", domain.ErrUserAuthentication
+		if errors.Is(err, domain2.ErrUserNotFound) {
+			return "", domain2.ErrUserAuthentication
 		}
 		return "", err
 	}
 
 	if !checkPassword(userInDB.PasswordHash, inUser.Password) {
-		return "", domain.ErrUserAuthentication
+		return "", domain2.ErrUserAuthentication
 	}
 	if err = tx.Commit(); err != nil {
 		return "", fmt.Errorf("failed to commit transaction: %w", err)
