@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,7 +14,7 @@ import (
 
 type PrivateService interface {
 	Save(ctx context.Context, pd domain.Data, inputUser domain.InUserRequest, saveLocalOnError bool) error
-	GetPage(ctx context.Context, gpr domain.GetAllRequest, inputUser domain.InUserRequest) ([]domain.Data, error)
+	GetAll(ctx context.Context, gpr domain.GetAllRequest, inputUser domain.InUserRequest) ([]domain.Data, error)
 	Get(ctx context.Context, id string, inputUser domain.InUserRequest) (*domain.Data, error)
 	Delete(ctx context.Context, pd domain.DeleteRequest) error
 	Upload(ctx context.Context) error
@@ -32,266 +31,136 @@ func NewPrivateCLI(privateService PrivateService) *PrivateCLI {
 }
 
 func (pc *PrivateCLI) GetCommands() []*cobra.Command {
-	cmdSave := &cobra.Command{
+	return []*cobra.Command{
+		pc.createSaveCommand(),
+		pc.createGetCommand(),
+		pc.createGetAllCommand(),
+		pc.createDeleteCommand(),
+		pc.createUploadCommand(),
+	}
+}
+
+func (pc *PrivateCLI) createSaveCommand() *cobra.Command {
+	cmd := &cobra.Command{
 		Use:   "save",
-		Short: "save data. Available data types: auth, file, card, text",
+		Short: "Save data. Available data types: auth, file, card, text",
 		Run:   pc.save,
 	}
-	// for authentication and encryption
-	cmdSave.Flags().String("login", "", "authentication on server")
-	cmdSave.Flags().String("password", "", "authentication on server")
 
-	// data type
-	cmdSave.Flags().String("type", "", "data type")
+	addCommonAuthFlags(cmd)
+	cmd.Flags().String("type", "", "Data type")
+	cmd.Flags().String("id", "", "Data key")
+	cmd.Flags().String("meta", "", "Meta information (not encrypted)")
+	cmd.Flags().Bool("save-local-on-error", false, "Save locally if server unavailable")
 
-	// data key
-	cmdSave.Flags().String("id", "", "data key")
+	// Data-specific flags
+	cmd.Flags().String("data-login", "", "Login for external resource")
+	cmd.Flags().String("data-password", "", "Password for external resource")
+	cmd.Flags().String("data-number", "", "Card number")
+	cmd.Flags().String("data-name", "", "Card name")
+	cmd.Flags().String("data-date", "", "Card expiration date")
+	cmd.Flags().Uint16("data-secure", 0, "Card security code")
+	cmd.Flags().String("text", "", "Text for saving")
+	cmd.Flags().String("file", "", "File with data for saving")
 
-	// meta information
-	cmdSave.Flags().String("meta", "", "meta information for saving. Will not encrypted")
+	return cmd
+}
 
-	// save-local-on-error
-	cmdSave.Flags().Bool("save-local-on-error", false, "data will be saved locally if server is unavailable. You should run upload command when you will have access to the server")
-
-	// for login and password
-	cmdSave.Flags().String("data-login", "", "login on external resourse")
-	cmdSave.Flags().String("data-password", "", "password on external resource")
-
-	// for card data
-	cmdSave.Flags().String("data-number", "", "card number")
-	cmdSave.Flags().String("data-name", "", "card name")
-	cmdSave.Flags().String("data-date", "", "card expiration date")
-	cmdSave.Flags().Uint16("data-secure", 0, "card security code")
-
-	// for text and bytes
-	cmdSave.Flags().String("text", "", "text for saving")
-	cmdSave.Flags().String("file", "", "file with data for saving")
-
-	cmdGet := &cobra.Command{
+func (pc *PrivateCLI) createGetCommand() *cobra.Command {
+	cmd := &cobra.Command{
 		Use:   "get",
-		Short: "get data",
+		Short: "Get data",
 		Run:   pc.get,
 	}
-	// for authentication and encryption
-	cmdGet.Flags().String("login", "", "authentication on server")
-	cmdGet.Flags().String("password", "", "authentication on server")
 
-	cmdGet.Flags().String("id", "", "data key")
+	addCommonAuthFlags(cmd)
+	cmd.Flags().String("id", "", "Data key")
+	cmd.Flags().String("output", "", "Output file")
 
-	cmdGet.Flags().String("output", "", "file for output data")
+	return cmd
+}
 
-	cmdGetPage := &cobra.Command{
-		Use:   "getpage",
-		Short: "getpage data",
-		Run:   pc.getPage,
+func (pc *PrivateCLI) createGetAllCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "get_all",
+		Short: "Get all private data",
+		Run:   pc.getAll,
 	}
-	// for authentication and encryption
-	cmdGetPage.Flags().String("login", "", "authentication on server")
-	cmdGetPage.Flags().String("password", "", "authentication on server")
 
-	cmdGetPage.Flags().Uint64("limit", 10, "num of elements")
-	cmdGetPage.Flags().Uint64("offset", 0, "page number")
+	addCommonAuthFlags(cmd)
+	cmd.Flags().Uint64("limit", 10, "Number of elements")
+	cmd.Flags().Uint64("offset", 0, "Page number")
+	cmd.Flags().String("output", "", "Output file")
 
-	cmdGetPage.Flags().String("output", "", "file for output data")
+	return cmd
+}
 
-	cmdDelete := &cobra.Command{
+func (pc *PrivateCLI) createDeleteCommand() *cobra.Command {
+	cmd := &cobra.Command{
 		Use:   "delete",
-		Short: "delete data",
+		Short: "Delete private data",
 		Run:   pc.delete,
 	}
-	// for authentication and encryption
 
-	cmdDelete.Flags().String("id", "", "data key")
+	cmd.Flags().String("id", "", "Data key")
 
-	cmdUpload := &cobra.Command{
+	return cmd
+}
+
+func (pc *PrivateCLI) createUploadCommand() *cobra.Command {
+	return &cobra.Command{
 		Use:   "upload",
-		Short: "upload data",
+		Short: "Upload private data",
 		Run:   pc.upload,
 	}
-
-	return []*cobra.Command{cmdSave, cmdGet, cmdGetPage, cmdDelete, cmdUpload}
 }
 
-func (pc *PrivateCLI) getCardData(cmd *cobra.Command) ([]byte, error) {
-	dataNumber, err := cmd.Flags().GetString("data-number")
-	if err != nil || dataNumber == "" {
-		fmt.Print("Enter your card number (without spaces): ")
-		fmt.Scanf("%s", &dataNumber)
-	}
-	dataName, err := cmd.Flags().GetString("data-name")
-	if err != nil || dataName == "" {
-		fmt.Print("Enter your name: ")
-		fmt.Scanf("%s", &dataName)
-	}
-	dataDate, err := cmd.Flags().GetString("data-date")
-	if err != nil || dataDate == "" {
-		fmt.Print("Enter card expiration date: ")
-		fmt.Scanf("%s", &dataDate)
-	}
-	dataSecure, err := cmd.Flags().GetUint16("data-secure")
-	if err != nil || dataSecure == 0 {
-		fmt.Print("Enter your cvv: ")
-		fmt.Scanf("%d", &dataSecure)
-	}
-
-	cardData := domain.CardData{
-		Number: dataNumber,
-		Name:   dataName,
-		Secure: dataSecure,
-		Date:   dataDate,
-	}
-	data, err := json.Marshal(cardData)
-	if err != nil {
-		return nil, errors.New("internal error")
-	}
-	return data, nil
+func addCommonAuthFlags(cmd *cobra.Command) {
+	cmd.Flags().String("login", "", "Authentication login")
+	cmd.Flags().String("password", "", "Authentication password")
 }
 
-func (pc *PrivateCLI) getTextData(cmd *cobra.Command) []byte {
-	dataText, err := cmd.Flags().GetString("text")
-	if err != nil || dataText == "" {
-		data, err := pc.getFileData(cmd, false)
-		if err != nil {
-			fmt.Print("Enter your text: ")
-			fmt.Scanf("%s", &dataText)
-			return []byte(dataText)
-		}
-		return data
-	}
-	return []byte(dataText)
-}
+type dataHandler func(*cobra.Command) ([]byte, error)
 
-func (pc *PrivateCLI) saveDataToFile(data []byte, filePath string) error {
-	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	_, err = file.Write(data)
-	return err
-}
-
-func (pc *PrivateCLI) getFileData(cmd *cobra.Command, askFile bool) ([]byte, error) {
-	filePath, err := cmd.Flags().GetString("file")
-	if err != nil || filePath == "" {
-		if !askFile {
-			return nil, err
-		}
-		fmt.Print("Enter file path: ")
-		fmt.Scanf("%s", &filePath)
-	}
-	file, err := os.OpenFile(filePath, os.O_RDONLY|os.O_CREATE, 0666)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var buf bytes.Buffer
-	_, err = buf.ReadFrom(file)
-	if err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func (pc *PrivateCLI) getBytesData(cmd *cobra.Command) ([]byte, error) {
-	return pc.getFileData(cmd, true)
-}
-
-func (pc *PrivateCLI) getAuthData(cmd *cobra.Command) ([]byte, error) {
-	dataLogin, err := cmd.Flags().GetString("data-login")
-	if err != nil || dataLogin == "" {
-		fmt.Print("Enter your login for saving: ")
-		fmt.Scanf("%s", &dataLogin)
-	}
-	dataPassword, err := cmd.Flags().GetString("data-password")
-	if err != nil || dataPassword == "" {
-		fmt.Print("Enter your password for saving: ")
-		fmt.Scanf("%s", &dataPassword)
-	}
-
-	loginPasswordData := domain.LoginPasswordData{
-		Login:    dataLogin,
-		Password: dataPassword,
-	}
-	data, err := json.Marshal(loginPasswordData)
-	if err != nil {
-		return nil, errors.New("internal error")
-	}
-	return data, nil
-}
-
-func (pc *PrivateCLI) authenticate(cmd *cobra.Command) *domain.InUserRequest {
-	login, err := cmd.Flags().GetString("login")
-	if err != nil || login == "" {
-		fmt.Print("Enter your login: ")
-		fmt.Scanf("%s", &login)
-	}
-
-	password, err := cmd.Flags().GetString("password")
-	if err != nil || password == "" {
-		fmt.Print("Enter your password: ")
-		fmt.Scanf("%s", &password)
-	}
-
-	return &domain.InUserRequest{
-		Login:    login,
-		Password: password,
-	}
+var dataHandlers = map[domain.Type]dataHandler{
+	domain.LOGIN_PASSWORD: func(cmd *cobra.Command) ([]byte, error) {
+		return handleAuthData(cmd)
+	},
+	domain.CARD: func(cmd *cobra.Command) ([]byte, error) {
+		return handleCardData(cmd)
+	},
+	domain.TEXT: func(cmd *cobra.Command) ([]byte, error) {
+		return handleTextData(cmd)
+	},
+	domain.BYTES: func(cmd *cobra.Command) ([]byte, error) {
+		return handleFileData(cmd, true)
+	},
 }
 
 func (pc *PrivateCLI) save(cmd *cobra.Command, _ []string) {
-	saveLocalOnError, _ := cmd.Flags().GetBool("save-local-on-error")
-
+	ctx := cmd.Context()
 	u := pc.authenticate(cmd)
 
-	id, err := cmd.Flags().GetString("id")
-	if err != nil || id == "" {
-		fmt.Print("Enter id: ")
-		fmt.Scanf("%s", &id)
+	id := getInputString(cmd, "id", "Enter id: ")
+	dataTypeStr := getInputString(cmd, "type", "Enter data type: ")
+	metaDataStr := getInputString(cmd, "meta", "Enter meta data: ")
+	saveLocalOnError, _ := cmd.Flags().GetBool("save-local-on-error")
+
+	dataType := parseType(dataTypeStr)
+	if dataType == domain.UNKNOWN {
+		pc.handleError(fmt.Errorf("invalid data type"))
+		return
 	}
 
-	dataTypeStr, err := cmd.Flags().GetString("type")
-	if err != nil || dataTypeStr == "" {
-		fmt.Print("Enter data type: ")
-		fmt.Scanf("%s", &dataTypeStr)
+	handler, exists := dataHandlers[dataType]
+	if !exists {
+		pc.handleError(fmt.Errorf("unsupported data type: %s", dataType))
+		return
 	}
 
-	metaDataStr, err := cmd.Flags().GetString("meta")
-	if err != nil || metaDataStr == "" {
-		fmt.Print("Enter meta data: ")
-		fmt.Scanf("%s", &metaDataStr)
-	}
-
-	var dataType domain.Type
-	var data []byte
-	switch dataTypeStr {
-	case "auth":
-		dataType = domain.LOGIN_PASSWORD
-		data, err = pc.getAuthData(cmd)
-		if err != nil {
-			fmt.Printf("%v", err)
-			return
-		}
-	case "card":
-		dataType = domain.CARD
-		data, err = pc.getCardData(cmd)
-		if err != nil {
-			fmt.Printf("%v", err)
-			return
-		}
-	case "text":
-		dataType = domain.TEXT
-		data = pc.getTextData(cmd)
-	case "file":
-		dataType = domain.BYTES
-		data, err = pc.getBytesData(cmd)
-		if err != nil {
-			fmt.Printf("%v", err)
-			return
-		}
-	default:
-		fmt.Printf("invalid data type provided")
+	data, err := handler(cmd)
+	if err != nil {
+		pc.handleError(err)
 		return
 	}
 
@@ -303,13 +172,12 @@ func (pc *PrivateCLI) save(cmd *cobra.Command, _ []string) {
 		SavedAt:  time.Now(),
 	}
 
-	err = pc.privateService.Save(cmd.Context(), pd, *u, saveLocalOnError)
-	if err != nil {
+	if err := pc.privateService.Save(ctx, pd, *u, saveLocalOnError); err != nil {
 		if errors.Is(err, domain.WarnServerUnavailable) {
-			fmt.Printf("Your data was saved locally, try command \"upload\" for uploading your data to the server")
+			fmt.Println("Your data was saved locally, try command \"upload\" for uploading your data to the server")
 			return
 		}
-		fmt.Printf("Exception occured: %v", err)
+		pc.handleError(err)
 		return
 	}
 
@@ -317,112 +185,51 @@ func (pc *PrivateCLI) save(cmd *cobra.Command, _ []string) {
 }
 
 func (pc *PrivateCLI) get(cmd *cobra.Command, _ []string) {
+	ctx := cmd.Context()
 	u := pc.authenticate(cmd)
+	id := getInputString(cmd, "id", "Enter id: ")
 
-	id, err := cmd.Flags().GetString("id")
-	if err != nil || id == "" {
-		fmt.Print("Enter id: ")
-		fmt.Scanf("%s", &id)
-	}
-
-	data, err := pc.privateService.Get(cmd.Context(), id, *u)
+	data, err := pc.privateService.Get(ctx, id, *u)
 	if err != nil {
-		if errors.Is(err, domain.ErrPrivateDataNotFound) {
-			fmt.Printf("Data with id %s was not found", id)
-			return
-		}
-		fmt.Printf("Exception occured: %v", err)
+		pc.handleGetError(err, id)
 		return
 	}
 
-	switch data.DataType {
-	case domain.LOGIN_PASSWORD:
-		fmt.Printf("%s\n\n", data.MetaData)
-		fmt.Printf("%s\n", string(data.Data))
-	case domain.CARD:
-		fmt.Printf("%s\n\n", data.MetaData)
-		fmt.Printf("%s\n", string(data.Data))
-	case domain.TEXT:
-		filePath, err := cmd.Flags().GetString("output")
-		if err != nil || filePath == "" {
-			fmt.Printf("%s\n\n", data.MetaData)
-			fmt.Printf("%s\n", string(data.Data))
-		} else {
-			pc.saveDataToFile(data.Data, filePath)
-		}
-	case domain.BYTES:
-		filePath, err := cmd.Flags().GetString("output")
-		if err != nil || filePath == "" {
-			fmt.Print("Enter output file: ")
-			fmt.Scanf("%s", &filePath)
-		}
-		pc.saveDataToFile(data.Data, filePath)
-	default:
-		fmt.Printf("invalid data type :(")
-		return
+	if err := pc.handleOutput(cmd, data); err != nil {
+		pc.handleError(err)
 	}
 }
 
-func (pc *PrivateCLI) getPage(cmd *cobra.Command, _ []string) {
+func (pc *PrivateCLI) getAll(cmd *cobra.Command, _ []string) {
+	ctx := cmd.Context()
 	u := pc.authenticate(cmd)
 
-	limit, err := cmd.Flags().GetUint64("limit")
+	limit, _ := cmd.Flags().GetUint64("limit")
+	offset, _ := cmd.Flags().GetUint64("offset")
+
+	data, err := pc.privateService.GetAll(ctx, domain.GetAllRequest{Limit: limit, Offset: offset}, *u)
 	if err != nil {
-		fmt.Printf("Exception occured: %v", err)
+		pc.handleError(err)
 		return
-	}
-
-	offset, err := cmd.Flags().GetUint64("offset")
-	if err != nil {
-		fmt.Printf("Exception occured: %v", err)
-		return
-	}
-
-	getPageRequest := domain.GetAllRequest{
-		Limit:  limit,
-		Offset: offset,
-	}
-
-	data, err := pc.privateService.GetPage(cmd.Context(), getPageRequest, *u)
-	if err != nil {
-		fmt.Printf("Exception occured: %v", err)
-		return
-	}
-
-	filePath, err := cmd.Flags().GetString("output")
-	if err != nil || filePath == "" {
-		fmt.Print("Enter output file: ")
-		fmt.Scanf("%s", &filePath)
 	}
 
 	resBytes, err := json.Marshal(data)
 	if err != nil {
-		fmt.Printf("Exception occured: %v", err)
+		pc.handleError(fmt.Errorf("marshaling error: %w", err))
 		return
 	}
 
-	err = pc.saveDataToFile(resBytes, filePath)
-	if err != nil {
-		fmt.Printf("Exception occured: %v", err)
-		return
+	if err := pc.saveToOutput(cmd, resBytes); err != nil {
+		pc.handleError(err)
 	}
 }
 
 func (pc *PrivateCLI) delete(cmd *cobra.Command, _ []string) {
-	id, err := cmd.Flags().GetString("id")
-	if err != nil || id == "" {
-		fmt.Print("Enter id: ")
-		fmt.Scanf("%s", &id)
-	}
+	ctx := cmd.Context()
+	id := getInputString(cmd, "id", "Enter id: ")
 
-	deleteRequest := domain.DeleteRequest{
-		ID:        id,
-		DeletedAt: time.Now(),
-	}
-
-	err = pc.privateService.Delete(cmd.Context(), deleteRequest)
-	if err != nil {
-		fmt.Printf("Exception occured: %v", err)
+	if err := pc.privateService.Delete(ctx, domain.DeleteRequest{ID: id, DeletedAt: time.Now()}); err != nil {
+		pc.handleError(err)
 		return
 	}
 
@@ -430,11 +237,126 @@ func (pc *PrivateCLI) delete(cmd *cobra.Command, _ []string) {
 }
 
 func (pc *PrivateCLI) upload(cmd *cobra.Command, _ []string) {
-	err := pc.privateService.Upload(cmd.Context())
-	if err != nil {
-		fmt.Printf("Exception occured: %v", err)
+	if err := pc.privateService.Upload(cmd.Context()); err != nil {
+		pc.handleError(err)
 		return
 	}
+	fmt.Println("Your data was successfully uploaded")
+}
 
-	fmt.Printf("Your data was successfully uploaded")
+func parseType(dataType string) domain.Type {
+	switch dataType {
+	case "auth":
+		return domain.LOGIN_PASSWORD
+	case "card":
+		return domain.CARD
+	case "text":
+		return domain.TEXT
+	case "file":
+		return domain.BYTES
+	default:
+		return domain.UNKNOWN
+	}
+}
+
+func getInputString(cmd *cobra.Command, flagName, prompt string) string {
+	val, err := cmd.Flags().GetString(flagName)
+	if err != nil || val == "" {
+		fmt.Print(prompt)
+		fmt.Scanf("%s", &val)
+	}
+	return val
+}
+
+func (pc *PrivateCLI) authenticate(cmd *cobra.Command) *domain.InUserRequest {
+	return &domain.InUserRequest{
+		Login:    getInputString(cmd, "login", "Enter your login: "),
+		Password: getInputString(cmd, "password", "Enter your password: "),
+	}
+}
+
+func (pc *PrivateCLI) handleError(err error) {
+	fmt.Printf("Error: %v\n", err)
+}
+
+func (pc *PrivateCLI) handleGetError(err error, id string) {
+	if errors.Is(err, domain.ErrPrivateDataNotFound) {
+		fmt.Printf("Data with id %s was not found\n", id)
+		return
+	}
+	pc.handleError(err)
+}
+
+func (pc *PrivateCLI) handleOutput(cmd *cobra.Command, data *domain.Data) error {
+	switch data.DataType {
+	case domain.LOGIN_PASSWORD, domain.CARD:
+		fmt.Printf("%s\n\n%s\n", data.MetaData, data.Data)
+		return nil
+	case domain.TEXT, domain.BYTES:
+		return pc.saveToOutput(cmd, data.Data)
+	default:
+		return errors.New("unsupported data type")
+	}
+}
+
+func (pc *PrivateCLI) saveToOutput(cmd *cobra.Command, data []byte) error {
+	filePath, _ := cmd.Flags().GetString("output")
+	if filePath == "" {
+		fmt.Print("Enter output file: ")
+		fmt.Scanf("%s", &filePath)
+	}
+	return pc.saveDataToFile(data, filePath)
+}
+
+func (pc *PrivateCLI) saveDataToFile(data []byte, filePath string) error {
+	return os.WriteFile(filePath, data, 0666)
+}
+
+func handleAuthData(cmd *cobra.Command) ([]byte, error) {
+	dataLogin := getInputString(cmd, "data-login", "Enter login for saving: ")
+	dataPassword := getInputString(cmd, "data-password", "Enter password for saving: ")
+
+	return json.Marshal(domain.LoginPasswordData{
+		Login:    dataLogin,
+		Password: dataPassword,
+	})
+}
+
+func handleCardData(cmd *cobra.Command) ([]byte, error) {
+	dataNumber := getInputString(cmd, "data-number", "Enter card number: ")
+	dataName := getInputString(cmd, "data-name", "Enter card name: ")
+	dataDate := getInputString(cmd, "data-date", "Enter expiration date: ")
+	dataSecure := getInputUint16(cmd, "data-secure", "Enter CVV: ")
+
+	return json.Marshal(domain.CardData{
+		Number: dataNumber,
+		Name:   dataName,
+		Date:   dataDate,
+		Secure: dataSecure,
+	})
+}
+
+func handleTextData(cmd *cobra.Command) ([]byte, error) {
+	if text, _ := cmd.Flags().GetString("text"); text != "" {
+		return []byte(text), nil
+	}
+	return handleFileData(cmd, false)
+}
+
+func handleFileData(cmd *cobra.Command, required bool) ([]byte, error) {
+	filePath, _ := cmd.Flags().GetString("file")
+	if filePath == "" && required {
+		fmt.Print("Enter file path: ")
+		fmt.Scanf("%s", &filePath)
+	}
+	return os.ReadFile(filePath)
+}
+
+func getInputUint16(cmd *cobra.Command, flagName, prompt string) uint16 {
+	val, err := cmd.Flags().GetUint16(flagName)
+	if err != nil || val == 0 {
+		fmt.Print(prompt)
+		fmt.Scanf("%d", &val)
+	}
+	return val
 }

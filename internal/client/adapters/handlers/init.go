@@ -13,7 +13,7 @@ type Clients struct {
 
 func NewClients(cfg *config.Config) *Clients {
 	restyClient := resty.New().
-		SetBaseURL("https://" + cfg.Addr).
+		SetBaseURL("http://" + cfg.Addr).
 		SetContentLength(true).
 		SetRetryCount(cfg.ServerRetries).
 		SetTimeout(cfg.ServerTimeout)

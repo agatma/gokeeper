@@ -15,6 +15,7 @@ const (
 	TEXT
 	BYTES
 	CARD
+	UNKNOWN
 )
 
 func (t Type) MarshalJSON() ([]byte, error) {
